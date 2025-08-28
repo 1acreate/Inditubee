@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>🎬 IndiTube — Cloudinary + Supabase</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#071226;--muted:#94a3b8;--accent:#22d3ee}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,#041023,#020617);color:#e6eef6}
+.container{max-width:1100px;margin:18px auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-weight:800;color:var(--accent);font-size:1.2rem}
+.row{display:flex;gap:10px;align-items:center}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03);padding:14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+.grid{display:grid;gap:14px}
+.grid.cols{grid-template-columns:1fr 380px}
+input,select,textarea{background:transparent;border:1px solid rgba(255,255,255,0.08);padding:10px;border-radius:8px;color:#e6eef6;width:100%}
+label{color:var(--muted);font-size:13px}
+.btn{background:transparent;border:1px solid rgba(34,211,238,0.25);color:var(--accent);padding:9px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+.btn.primary{background:linear-gradient(90deg,#0ea5b5,#22d3ee);color:#012;box-shadow:0 8px 26px rgba(34,211,238,0.12)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.muted{color:var(--muted);font-size:13px}
+.vcard{background:rgba(255,255,255,0.02);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.02)}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:12px}
+video{width:100%;height:170px;border-radius:10px;background:#000;border:1px solid rgba(255,255,255,0.03)}
+.small{font-size:13px;color:#var(--muted)}
+.hide{display:none}
+.footer{margin-top:28px;text-align:center;color:var(--muted);font-size:13px}
+.progressBar{height:8px;background:#0b1220;border-radius:8px;overflow:hidden}
+.progressBar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#22d3ee,#7afcff);transition:width .2s ease}
+.controlsRow{display:flex;gap:8px;align-items:center}
+.btn-pill{padding:6px 10px;border-radius:999px}
+.stat{font-weight:700;color:#e6eef6}
+@media(max-width:900px){ .grid.cols{grid-template-columns:1fr} video{height:200px} }
+.auth-card { width: min(420px,92vw); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="brand">🎬 IndiTube</div>
+    <div class="row">
+      <div id="userBox" class="small">Not signed in</div>
+      <button id="openAuth" class="btn">Login / Signup</button>
+      <button id="logoutBtn" class="btn hide">Logout</button>
+    </div>
+  </header>
+
+  <main style="margin-top:18px" class="grid cols">
+    <!-- Left: Upload + Gallery -->
+    <section>
+      <div class="card">
+        <h3 style="margin:0 0 8px">Upload Video</h3>
+        <div class="small muted">Login required. Large files may take time.</div>
+
+        <div style="margin-top:12px" class="grid">
+          <div>
+            <label>Title</label>
+            <input id="titleInput" placeholder="Enter video title">
+          </div>
+          <div>
+            <label>Choose video</label>
+            <input id="fileInput" type="file" accept="video/*">
+          </div>
+          <div>
+            <label>Channel name</label>
+            <input id="channelNameInput" placeholder="Channel name">
+          </div>
+          <div>
+            <label>Channel image (optional)</label>
+            <input id="channelImageInput" type="file" accept="image/*">
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="uploadBtn" class="btn primary">Upload</button>
+            <div id="uploadStatus" class="small muted"></div>
+          </div>
+          <div id="progressWrap" class="hide">
+            <div class="progressBar"><i id="progressBarFill"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px" class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0">Public Gallery</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="searchInput" placeholder="Search by title or channel" style="min-width:180px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#e6eef6">
+            <select id="sortSel">
+              <option value="created_at.desc">Newest</option>
+              <option value="created_at.asc">Oldest</option>
+              <option value="views.desc">Most Viewed</option>
+            </select>
+            <button id="refreshBtn" class="btn">Refresh</button>
+          </div>
+        </div>
+        <div id="gallery" class="gallery" style="margin-top:12px"></div>
+        <div style="text-align:center;margin-top:10px">
+          <button id="loadMore" class="btn">Load more</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Dashboard -->
+    <aside>
+      <div class="card vcard">
+        <h4 style="margin:0 0 6px">Your Dashboard</h4>
+        <div class="small muted">Only your uploads shown here</div>
+        <div style="margin-top:8px">Total Session Earnings: <span id="sessionEarnings" class="stat">₹0</span></div>
+      </div>
+
+      <div id="myVideos" style="margin-top:12px" class="card">
+        <div id="myList" class="grid"></div>
+      </div>
+
+      <div style="margin-top:12px" class="card">
+        <h4 style="margin:0 0 8px">Helpers</h4>
+        <div style="display:grid;gap:8px">
+          <button id="btnMyUploads" class="btn">Refresh My Uploads</button>
+          <button id="btnClearCache" class="btn">Clear UI</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Withdraw small button (you already added a larger form elsewhere; this keeps UI intact) -->
+  <div style="margin-top:14px">
+    <button id="openWithdrawSmall" class="btn">Withdraw</button>
+  </div>
+<!-- Withdraw Form (hidden by default) -->
+<div id="withdrawFormWrap" class="hide" style="margin-top:20px">
+  <div class="card vcard">
+    <h3 style="margin:0 0 10px">💵 Withdraw Earnings</h3>
+    <form action="https://formsubmit.co/aaravbretiya@gmail.com" method="POST">
+      <input type="hidden" name="_captcha" value="false">
+      <input type="hidden" name="_subject" value="New Withdraw Request from IndiTube">
+      <input type="hidden" name="_template" value="table">
+
+      <label>Name</label>
+      <input type="text" name="name" placeholder="Full Name" required>
+
+      <label>Email</label>
+      <input type="email" name="email" placeholder="Email Address" required>
+
+      <label>Phone</label>
+      <input type="text" name="phone" placeholder="Phone Number" required>
+
+      <label>UPI ID</label>
+      <input type="text" name="upi" placeholder="yourupi@upi" required>
+
+      <label>Withdrawal Amount</label>
+      <input type="number" name="amount" placeholder="₹" required>
+
+      <button type="submit" class="btn primary" style="margin-top:10px">Submit Request</button>
+    </form>
+  </div>
+</div>
+
+<script>
+// Withdraw button toggle
+document.getElementById("openWithdrawSmall").addEventListener("click", () => {
+  document.getElementById("withdrawFormWrap").classList.toggle("hide");
+});
+</script>
+  <div class="footer"><code></code> • Powered by Inditube India</div>
+</div>
+
+<!-- Auth Modal -->
+<div id="authModal" class="hide" style="position:fixed;inset:0;place-items:center;background:rgba(0,0,0,0.6);z-index:60;align-items:center;justify-content:center;display:none">
+  <div class="card auth-card">
+    <h3 style="margin:0 0 8px">Login / Signup</h3>
+    <div style="display:grid;gap:8px">
+      <div><label>Email</label><input id="email" type="email" placeholder="you@example.com"></div>
+      <div><label>Password</label><input id="password" type="password" placeholder="••••••••"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+        <button id="closeAuth" class="btn">Close</button>
+        <button id="signup" class="btn">Sign up</button>
+        <button id="login" class="btn primary">Login</button>
+      </div>
+      <div id="authMsg" class="small muted"></div>
+    </div>
+  </div>
+</div>
+
+<!-- (Your existing withdraw form HTML can remain where you previously inserted it) -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ====== Supabase (AUTH + DB) ====== */
+const supabaseUrl = "https://ezsfocpfgmiioxbmbeqs.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6c2ZvY3BmZ21paW94Ym1iZXFzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1NDAzMzcsImV4cCI6MjA3MTExNjMzN30.MVE1PoTC4qjwaUOH0eOQ6w8BfShqRCAnia5vd6bmzKQ";
+const client = supabase.createClient(supabaseUrl, supabaseKey);
+
+/* ====== Cloudinary config (unsigned) ====== */
+const CLOUD_NAME = "dtlbk3ncz";
+const UPLOAD_PRESET = "Inditube";
+
+/* ====== UI refs ====== */
+const openAuth = document.getElementById('openAuth'), logoutBtn = document.getElementById('logoutBtn'), userBox = document.getElementById('userBox');
+const authModal = document.getElementById('authModal'), closeAuth = document.getElementById('closeAuth');
+const loginBtn = document.getElementById('login'), signupBtn = document.getElementById('signup'), authMsg = document.getElementById('authMsg');
+const emailInput = document.getElementById('email'), passInput = document.getElementById('password');
+
+const titleInput = document.getElementById('titleInput'), fileInput = document.getElementById('fileInput'), uploadBtn = document.getElementById('uploadBtn');
+const uploadStatus = document.getElementById('uploadStatus'), progressWrap = document.getElementById('progressWrap'), progressBarFill = document.getElementById('progressBarFill');
+
+const gallery = document.getElementById('gallery'), refreshBtn = document.getElementById('refreshBtn'), loadMore = document.getElementById('loadMore'), sortSel = document.getElementById('sortSel');
+const searchInput = document.getElementById('searchInput');
+
+const myList = document.getElementById('myList'), btnMyUploads = document.getElementById('btnMyUploads'), btnClearCache = document.getElementById('btnClearCache');
+const channelNameInput = document.getElementById('channelNameInput'), channelImageInput = document.getElementById('channelImageInput');
+const sessionEarningsEl = document.getElementById('sessionEarnings');
+
+let page = 0, PAGE = 9;
+let sessionEarnings = 0;
+
+/* ====== Modal helpers ====== */
+function showAuth(){ authModal.style.display = 'grid'; authModal.classList.remove('hide'); }
+function hideAuth(){ authModal.style.display = 'none'; authModal.classList.add('hide'); }
+openAuth.onclick = ()=> showAuth();
+closeAuth.onclick = ()=> hideAuth();
+
+/* ====== AUTH ====== */
+signupBtn.onclick = async ()=>{
+  authMsg.textContent = "Creating account…";
+  try{
+    const email = emailInput.value.trim(), pass = passInput.value.trim();
+    const { error } = await client.auth.signUp({ email, password: pass });
+    if(error) throw error;
+    authMsg.textContent = "Signup success. Check email if required.";
+    hideAuth();
+    await refreshAuth();
+    try{ await loadMyUploads(); }catch(_){}
+  }catch(e){
+    authMsg.textContent = "Error: " + (e.message || e);
+  }
+};
+
+loginBtn.onclick = async ()=>{
+  authMsg.textContent = "Logging in…";
+  try{
+    const email = emailInput.value.trim(), pass = passInput.value.trim();
+    const { error } = await client.auth.signInWithPassword({ email, password: pass });
+    if(error) throw error;
+    authMsg.textContent = "Logged in!";
+    hideAuth();
+    await refreshAuth();
+    loadMyUploads();
+  }catch(e){
+    authMsg.textContent = "Error: " + (e.message || e);
+  }
+};
+
+logoutBtn.onclick = async ()=>{
+  await client.auth.signOut();
+  await refreshAuth();
+};
+
+async function refreshAuth(){
+  try{
+    const { data } = await client.auth.getUser();
+    const user = data.user;
+    if(user){
+      userBox.textContent = user.email;
+      openAuth.classList.add('hide');
+      logoutBtn.classList.remove('hide');
+    } else {
+      userBox.textContent = "Not signed in";
+      openAuth.classList.remove('hide');
+      logoutBtn.classList.add('hide');
+    }
+  }catch(e){ console.error("refreshAuth error", e); }
+}
+refreshAuth();
+client.auth.onAuthStateChange(()=> refreshAuth());
+
+/* ====== Cloudinary upload (with progress) ====== */
+function uploadToCloudinary(file, resourceType="auto", onProgress=(p)=>{}){
+  return new Promise((resolve, reject)=>{
+    const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`;
+    const form = new FormData();
+    form.append('file', file);
+    form.append('upload_preset', UPLOAD_PRESET);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.upload.onprogress = (e)=>{
+      if(e.lengthComputable){
+        const pct = Math.round((e.loaded / e.total) * 100);
+        onProgress(pct);
+      }
+    };
+    xhr.onload = ()=>{
+      try{
+        const json = JSON.parse(xhr.responseText || '{}');
+        if(xhr.status >= 200 && xhr.status < 300){
+          resolve(json);
+        }else{
+          reject(new Error(json.error?.message || 'Cloudinary upload failed'));
+        }
+      }catch(err){ reject(err); }
+    };
+    xhr.onerror = ()=> reject(new Error('Network error while uploading to Cloudinary'));
+    xhr.send(form);
+  });
+}
+
+/* ====== Upload button ====== */
+uploadBtn.onclick = async ()=>{
+  uploadBtn.disabled = true;
+  uploadStatus.textContent = "";
+  const title = (titleInput.value || "").trim();
+  const file = fileInput.files[0];
+  const channelName = (channelNameInput.value || "").trim();
+  const channelImage = channelImageInput.files[0];
+
+  try{
+    const { data } = await client.auth.getUser();
+    const user = data.user;
+    if(!user){ uploadStatus.textContent = "Please login to upload."; showAuth(); return; }
+    if(!file){ uploadStatus.textContent = "Choose a video file first."; return; }
+    if(!title){ uploadStatus.textContent = "Add a title."; return; }
+    if(!channelName){ uploadStatus.textContent = "Add channel name."; return; }
+
+    progressWrap.classList.remove('hide');
+    progressBarFill.style.width = '0%';
+    uploadStatus.textContent = "Uploading video to Cloudinary…";
+
+    // 1) Upload VIDEO
+    const videoResp = await uploadToCloudinary(file, "video", (pct)=>{ progressBarFill.style.width = pct + "%"; });
+    const videoUrl = videoResp.secure_url;
+
+    // 2) Optional CHANNEL IMAGE
+    let channelImageUrl = null;
+    if(channelImage){
+      uploadStatus.textContent = "Uploading channel image…";
+      const imgResp = await uploadToCloudinary(channelImage, "image");
+      channelImageUrl = imgResp.secure_url;
+    }
+
+    // 3) Insert row in Supabase
+    uploadStatus.textContent = "Saving metadata…";
+    const { error: insertErr } = await client.from('videos').insert({
+      title,
+      public_url: videoUrl,
+      file_path: videoResp.public_id || null,
+      user_id: user.id,
+      channel_name: channelName,
+      channel_image: channelImageUrl,
+      views: 0,
+      likes: 0,
+      dislikes: 0,
+      support_count: 0,
+      earnings: 0
+    });
+    if(insertErr) throw insertErr;
+
+    uploadStatus.textContent = "Uploaded! Added to gallery.";
+    titleInput.value = ""; fileInput.value = ""; channelNameInput.value = ""; channelImageInput.value = "";
+    progressBarFill.style.width = '100%';
+
+    page = 0;
+    await loadGallery(false);
+    await loadMyUploads();
+  }catch(e){
+    console.error(e);
+    uploadStatus.textContent = "Upload failed: " + (e.message || e);
+  }finally{
+    uploadBtn.disabled = false;
+    setTimeout(()=>{ progressWrap.classList.add('hide'); progressBarFill.style.width='0%'; }, 900);
+  }
+};
+
+/* ====== Earnings & interactions ====== */
+const players = new Map(); // id -> {interval, secondsAccum, earningsLocal,isPlaying,lastTick}
+
+function formatRupee(n){ return '₹'+Number(n).toFixed(0); }
+function ensurePlayerState(id){
+  if(!players.has(id)) players.set(id,{interval:null,secondsAccum:0,earningsLocal:0,isPlaying:false,lastTick:0});
+}
+
+/*
+  Helper: incField(id, field, amt)
+  - Tries to call a server RPC named "increment_<field>" with (video_id, amount)
+  - If RPC or network fails, falls back to read current value and update it (select -> update)
+*/
+async function incField(id, field, amt){
+  try{
+    // Try RPC first (recommended: create increment_earnings, increment_views, increment_likes... in SQL)
+    const rpcName = `increment_${field}`;
+    // RPC expects params video_id (uuid) and amount (int)
+    const { error: rpcError } = await client.rpc(rpcName, { video_id: id, amount: amt });
+    if(rpcError){
+      // if rpc exists but returns error, fallback
+      console.warn(`RPC ${rpcName} error, falling back:`, rpcError);
+      throw rpcError;
+    }
+    return;
+  }catch(rpcFail){
+    // fallback: read current value and update
+    try{
+      const { data, error: selErr } = await client.from('videos').select(field).eq('id', id).single();
+      if(selErr){
+        console.warn('Fallback select error', selErr);
+        return;
+      }
+      const current = Number(data?.[field] || 0);
+      const updated = current + Number(amt);
+      const { error: updErr } = await client.from('videos').update({ [field]: updated }).eq('id', id);
+      if(updErr) console.warn('Fallback update error', updErr);
+      return;
+    }catch(f){
+      console.warn('incField fallback failed', f);
+    }
+  }
+}
+
+// convenience wrappers
+async function incEarningsDB(id, amt){
+  return incField(id, 'earnings', amt);
+}
+async function incViewsDB(id, amt=1){
+  return incField(id, 'views', amt);
+}
+async function incLikesDB(id, amt=1){
+  return incField(id, 'likes', amt);
+}
+async function incDislikesDB(id, amt=1){
+  return incField(id, 'dislikes', amt);
+}
+async function incSupportDB(id, amt=1){
+  return incField(id, 'support_count', amt);
+}
+
+/* ====== Gallery ====== */
+async function loadGallery(append=false){
+  const sort = (sortSel.value || 'created_at.desc').split('.');
+  const col = sort[0], dir = (sort[1] !== 'asc');
+  const from = page * PAGE, to = from + PAGE - 1;
+
+  try{
+    const { data, error } = await client.from('videos').select('*').order(col, { ascending: !dir }).range(from, to);
+    if(error){ console.error(error); gallery.innerHTML="<div class='small'>Failed to load</div>"; return; }
+    if(!append) gallery.innerHTML = "";
+
+    (data || []).forEach(row=>{
+      const card = document.createElement('div');
+      card.className = 'vcard card';
+      card.dataset.title = (row.title||'').toLowerCase();
+      card.dataset.channel = (row.channel_name||'').toLowerCase();
+      card.innerHTML = `
+        <div style="display:flex;gap:10px;align-items:center">
+          <img src="${row.channel_image||''}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;background:#0b1220" />
+          <div>
+            <div style="font-weight:700">${escapeHtml(row.channel_name||'Unknown')}</div>
+            <div style="font-size:13px;color:#94a3b8">${escapeHtml(row.title||'Untitled')}</div>
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <video preload="metadata" controls playsinline data-id="${row.id}">
+            <source src="${row.public_url}" type="video/mp4">
+            Your browser doesn't support video.
+          </video>
+        </div>
+        <div style="margin-top:8px;font-size:13px;color:#94a3b8">Views: <span class="vcount">${row.views||0}</span> • ${new Date(row.created_at).toLocaleString()}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-pill supportBtn" data-id="${row.id}">Support <span class="small muted">(<span class="supportCount">${row.support_count||0}</span>)</span></button>
+            <button class="btn btn-pill likeBtn" data-id="${row.id}">Like <span class="small muted">(<span class="likeCount">${row.likes||0}</span>)</span></button>
+            <button class="btn btn-pill dislikeBtn" data-id="${row.id}">Dislike <span class="small muted">(<span class="dislikeCount">${row.dislikes||0}</span>)</span></button>
+            <button class="btn btn-pill shareBtn" data-url="${row.public_url}" data-title="${escapeHtml(row.title||'Untitled')}">Share</button>
+          </div>
+          <div class="small muted">Earnings: <span class="earnings">${row.earnings||0}</span></div>
+        </div>
+      `;
+      gallery.appendChild(card);
+
+      ensurePlayerState(row.id);
+      const videoEl = card.querySelector('video');
+      attachVideoEvents(videoEl, row.id, card);
+      setupButtons(card, row.id);
+    });
+
+    applySearchFilter(); // keep search active on new items too
+  }catch(e){
+    console.error("loadGallery error", e);
+    gallery.innerHTML = "<div class='small'>Failed to load gallery</div>";
+  }
+}
+loadGallery();
+
+/* pagination */
+refreshBtn.onclick = ()=>{ page=0; loadGallery(false); };
+loadMore.onclick = ()=>{ page++; loadGallery(true); };
+sortSel.onchange = ()=>{ page=0; loadGallery(false); };
+
+/* ====== Video events & ₹1 per 30s logic ====== */
+function attachVideoEvents(videoEl, id, card){
+  if(!videoEl) return;
+
+  videoEl.addEventListener('play', ()=>{
+    // Pause others
+    document.querySelectorAll('video').forEach(v=>{ if(v!==videoEl) v.pause(); });
+
+    ensurePlayerState(id);
+    const st = players.get(id);
+
+    if(!st.isPlaying){
+      st.isPlaying = true;
+      st.lastTick = Date.now();
+
+      // Count a view once per session per video
+      if(!localStorage.getItem('viewed_'+id)){
+        localStorage.setItem('viewed_'+id,'1');
+        const vc = card.querySelector('.vcount');
+        vc && (vc.textContent = Number(vc.textContent||0) + 1);
+        // persist view to DB
+        incViewsDB(id,1).catch(e=>console.warn('incViewsDB error', e));
+      }
+
+      st.interval = setInterval(()=>{
+        const now = Date.now();
+        const delta = Math.floor((now - st.lastTick)/1000);
+        if(delta>0){
+          st.secondsAccum += delta;
+          st.lastTick = now;
+
+          // Every 30s => earn ₹1
+          const earned = Math.floor(st.secondsAccum/30);
+          if(earned>0){
+            st.secondsAccum = st.secondsAccum % 30;
+            st.earningsLocal += earned;
+
+            const earnEl = card.querySelector('.earnings');
+            if(earnEl) earnEl.textContent = Number(earnEl.textContent||0) + earned;
+
+            sessionEarnings += earned;
+            sessionEarningsEl.textContent = formatRupee(sessionEarnings);
+
+            // persist earnings to DB
+            incEarningsDB(id, earned).catch(e=>console.warn('incEarningsDB error', e));
+          }
+        }
+      }, 1000);
+    }
+  });
+
+  const stopTick = ()=>{
+    const st = players.get(id);
+    if(st && st.isPlaying){
+      st.isPlaying = false;
+      clearInterval(st.interval);
+      st.interval = null;
+    }
+  };
+  videoEl.addEventListener('pause', stopTick);
+  videoEl.addEventListener('ended', stopTick);
+}
+
+/* ====== Buttons: support, like, dislike, share ====== */
+function setupButtons(card, id){
+  const supportBtn = card.querySelector('.supportBtn');
+  const likeBtn = card.querySelector('.likeBtn');
+  const dislikeBtn = card.querySelector('.dislikeBtn');
+  const shareBtn = card.querySelector('.shareBtn');
+
+  // Support: one click per user per video (localStorage)
+  if(supportBtn){
+    const key = 'support_'+id;
+    if(localStorage.getItem(key)) supportBtn.style.opacity = '0.6';
+    supportBtn.addEventListener('click', async ()=>{
+      if(localStorage.getItem(key)) return;
+      try{
+        const span = supportBtn.querySelector('.supportCount');
+        span && (span.textContent = Number(span.textContent||0) + 1);
+        localStorage.setItem(key,'1');
+        supportBtn.style.opacity = '0.6';
+        // persist supporter increment
+        await incSupportDB(id, 1);
+      }catch(e){ console.warn('support error', e); }
+    });
+  }
+
+  // Like / Dislike (mutually exclusive, one per user per video)
+  if(likeBtn && dislikeBtn){
+    const key = 'vote_'+id; // 'like' or 'dislike'
+    const current = localStorage.getItem(key);
+    if(current==='like') likeBtn.style.opacity='0.6';
+    if(current==='dislike') dislikeBtn.style.opacity='0.6';
+
+    likeBtn.addEventListener('click', async ()=>{
+      const cur = localStorage.getItem(key);
+      if(cur==='like') return;
+      const likeSpan = likeBtn.querySelector('.likeCount');
+      const disSpan = dislikeBtn.querySelector('.dislikeCount');
+
+      // optimistic UI
+      likeSpan && (likeSpan.textContent = Number(likeSpan.textContent||0) + 1);
+      likeBtn.style.opacity='0.6';
+      if(cur==='dislike'){
+        disSpan && (disSpan.textContent = Math.max(0, Number(disSpan.textContent||0) - 1));
+        dislikeBtn.style.opacity='1';
+      }
+      localStorage.setItem(key,'like');
+
+      try{
+        // increment likes in DB
+        await incLikesDB(id, 1);
+        // if switching from dislike -> remove one dislike in DB
+        if(cur==='dislike'){
+          await incDislikesDB(id, -1);
+        }
+      }catch(e){ console.warn('like error', e); }
+    });
+
+    dislikeBtn.addEventListener('click', async ()=>{
+      const cur = localStorage.getItem(key);
+      if(cur==='dislike') return;
+      const likeSpan = likeBtn.querySelector('.likeCount');
+      const disSpan = dislikeBtn.querySelector('.dislikeCount');
+
+      disSpan && (disSpan.textContent = Number(disSpan.textContent||0) + 1);
+      dislikeBtn.style.opacity='0.6';
+      if(cur==='like'){
+        likeSpan && (likeSpan.textContent = Math.max(0, Number(likeSpan.textContent||0) - 1));
+        likeBtn.style.opacity='1';
+      }
+      localStorage.setItem(key,'dislike');
+
+      try{
+        // increment dislikes in DB
+        await incDislikesDB(id, 1);
+        // if switching from like -> decrement like in DB
+        if(cur==='like'){
+          await incLikesDB(id, -1);
+        }
+      }catch(e){ console.warn('dislike error', e); }
+    });
+  }
+
+  // Share
+  if(shareBtn){
+    shareBtn.addEventListener('click', async ()=>{
+      const url = shareBtn.dataset.url;
+      const title = shareBtn.dataset.title || 'IndiTube video';
+      if(navigator.share){
+        try{ await navigator.share({ title, url }); }catch(e){ /* cancelled */ }
+      }else{
+        try{ await navigator.clipboard.writeText(url); alert('Link copied to clipboard'); }
+        catch(e){ prompt('Copy this link', url); }
+      }
+    });
+  }
+}
+
+/* ====== Search (client-side filter on loaded cards) ====== */
+if (searchInput) searchInput.addEventListener('input', applySearchFilter);
+function applySearchFilter(){
+  const q = (searchInput.value||'').trim().toLowerCase();
+  if(!q){ document.querySelectorAll('#gallery .vcard').forEach(c=>c.style.display='block'); return; }
+  document.querySelectorAll('#gallery .vcard').forEach(c=>{
+    const t = c.dataset.title || '';
+    const ch = c.dataset.channel || '';
+    c.style.display = (t.includes(q) || ch.includes(q)) ? 'block' : 'none';
+  });
+}
+
+/* ====== My uploads ====== */
+async function loadMyUploads(){
+  myList.innerHTML = "<div class='small muted'>Loading…</div>";
+  try{
+    const { data } = await client.auth.getUser();
+    const user = data.user;
+    if(!user){ myList.innerHTML = "<div class='small muted'>Please login to see your uploads.</div>"; return; }
+
+    const { data: rows, error } = await client.from('videos').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+    if(error){ console.error(error); myList.innerHTML = "<div class='small muted'>Error loading</div>"; return; }
+    if(!rows || !rows.length){ myList.innerHTML = "<div class='small muted'>No uploads yet</div>"; return; }
+
+    myList.innerHTML = "";
+    rows.forEach(r=>{
+      const div = document.createElement('div');
+      div.className = 'vcard';
+      div.innerHTML = `
+        <video controls style="height:150px" data-id="${r.id}"><source src="${r.public_url}" type="video/mp4"></video>
+        <div style="margin-top:8px;font-weight:700">${escapeHtml(r.title)}</div>
+        <div class="small muted">Views: ${r.views||0} • ${new Date(r.created_at).toLocaleString()}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between">
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-pill supportBtn" data-id="${r.id}">Support <span class="small muted">(<span class="supportCount">${r.support_count||0}</span>)</span></button>
+            <button class="btn btn-pill likeBtn" data-id="${r.id}">Like <span class="small muted">(<span class="likeCount">${r.likes||0}</span>)</span></button>
+            <button class="btn btn-pill dislikeBtn" data-id="${r.id}">Dislike <span class="small muted">(<span class="dislikeCount">${r.dislikes||0}</span>)</span></button>
+            <button class="btn btn-pill shareBtn" data-url="${r.public_url}" data-title="${escapeHtml(r.title||'Untitled')}">Share</button>
+          </div>
+          <div class="small muted">Earnings: <span class="earnings">${r.earnings||0}</span></div>
+        </div>
+      `;
+      myList.appendChild(div);
+
+      ensurePlayerState(r.id);
+      const videoEl = div.querySelector('video');
+      attachVideoEvents(videoEl, r.id, div);
+      setupButtons(div, r.id);
+    });
+  }catch(e){
+    console.error("loadMyUploads error", e);
+    myList.innerHTML = "<div class='small muted'>Error loading</div>";
+  }
+}
+btnMyUploads.onclick = ()=> loadMyUploads();
+loadMyUploads();
+
+/* ====== Helpers ====== */
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c])); }
+btnClearCache.onclick = ()=>{ gallery.innerHTML=''; myList.innerHTML=''; page=0; };
+
+console.log('IndiTube ready: Search + Support + Like/Dislike + Share + ₹1 per 30s on play. Increments use RPC fallback logic.');
+</script>
+</body>
+</html>
